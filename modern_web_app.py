@@ -34,8 +34,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # MongoDB connection
-MONGODB_URL = "mongodb+srv://nihaaly41:7849@attendence.cfgt2xs.mongodb.net/"
+MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://nihaaly41:7849@attendence.cfgt2xs.mongodb.net/")
 DATABASE_NAME = "attendance_system"
+PORT = int(os.getenv("PORT", "8001"))
+DEBUG = os.getenv("DEBUG", "false").lower() == "true"
 
 # Create FastAPI app
 app = FastAPI(
@@ -390,8 +392,8 @@ async def home():
         
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
-            background: hsl(var(--background));
-            color: hsl(var(--foreground));
+            background: #0f172a;
+            color: #f1f5f9;
             line-height: 1.5;
             -webkit-font-smoothing: antialiased;
             font-feature-settings: "rlig" 1, "calt" 1;
@@ -443,8 +445,8 @@ async def home():
         }
         
         .upload-card {
-            background: var(--surface);
-            border: 2px dashed var(--border);
+            background: #1e293b;
+            border: 2px dashed #475569;
             border-radius: 1rem;
             padding: 2rem 1rem;
             text-align: center;
@@ -454,13 +456,13 @@ async def home():
         }
         
         .upload-card:hover {
-            border-color: var(--primary);
-            background: #f8faff;
+            border-color: #3b82f6;
+            background: rgb(59 130 246 / 0.1);
         }
         
         .upload-card.dragover {
-            border-color: var(--primary);
-            background: #f0f4ff;
+            border-color: #3b82f6;
+            background: rgb(59 130 246 / 0.15);
             transform: scale(1.02);
         }
         
@@ -884,61 +886,61 @@ async def home():
         }
         
         .btn-primary {
-            background: hsl(var(--primary));
-            color: hsl(var(--primary-foreground));
+            background: #3b82f6;
+            color: #ffffff;
             height: 2.25rem;
             padding: 0 1rem;
         }
         
         .btn-primary:hover {
-            background: hsl(var(--primary) / 0.9);
+            background: #2563eb;
         }
         
         .btn-secondary {
-            background: hsl(var(--secondary));
-            color: hsl(var(--secondary-foreground));
+            background: #475569;
+            color: #f1f5f9;
             height: 2.25rem;
             padding: 0 1rem;
         }
         
         .btn-secondary:hover {
-            background: hsl(var(--secondary) / 0.8);
+            background: #334155;
         }
         
         .btn-destructive {
-            background: hsl(var(--destructive));
-            color: hsl(var(--destructive-foreground));
+            background: #ef4444;
+            color: #ffffff;
             height: 2.25rem;
             padding: 0 1rem;
         }
         
         .btn-destructive:hover {
-            background: hsl(var(--destructive) / 0.9);
+            background: #dc2626;
         }
         
         .btn-outline {
-            border: 1px solid hsl(var(--border));
-            background: hsl(var(--background));
-            color: hsl(var(--foreground));
+            border: 1px solid #475569;
+            background: transparent;
+            color: #f1f5f9;
             height: 2.25rem;
             padding: 0 1rem;
         }
         
         .btn-outline:hover {
-            background: hsl(var(--accent));
-            color: hsl(var(--accent-foreground));
+            background: #334155;
+            color: #f1f5f9;
         }
         
         .btn-ghost {
             background: transparent;
-            color: hsl(var(--foreground));
+            color: #f1f5f9;
             height: 2.25rem;
             padding: 0 1rem;
         }
         
         .btn-ghost:hover {
-            background: hsl(var(--accent));
-            color: hsl(var(--accent-foreground));
+            background: #334155;
+            color: #f1f5f9;
         }
         
         .btn-sm {
@@ -957,11 +959,11 @@ async def home():
         
         /* Card component */
         .card {
-            border-radius: var(--radius);
-            border: 1px solid hsl(var(--border));
-            background: hsl(var(--card));
-            color: hsl(var(--card-foreground));
-            box-shadow: var(--shadow);
+            border-radius: 0.5rem;
+            border: 1px solid #334155;
+            background: #1e293b;
+            color: #f1f5f9;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -1px rgb(0 0 0 / 0.2);
         }
         
         .card-header {
@@ -981,7 +983,7 @@ async def home():
         
         .card-description {
             font-size: 0.875rem;
-            color: hsl(var(--muted-foreground));
+            color: #94a3b8;
         }
         
         .card-content {
@@ -1058,10 +1060,10 @@ async def home():
         }
         
         .modal-content {
-            background: hsl(var(--background));
-            border: 1px solid hsl(var(--border));
-            border-radius: var(--radius);
-            box-shadow: var(--shadow-lg);
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 10px 10px -5px rgb(0 0 0 / 0.3);
             max-width: 32rem;
             width: 100%;
             max-height: 85vh;
@@ -1074,7 +1076,7 @@ async def home():
             align-items: center;
             justify-content: space-between;
             padding: 1.5rem;
-            border-bottom: 1px solid hsl(var(--border));
+            border-bottom: 1px solid #334155;
         }
         
         .modal-title {
@@ -1208,8 +1210,8 @@ async def home():
         
         .tabs {
             display: flex;
-            background: hsl(var(--muted));
-            border-radius: var(--radius);
+            background: #334155;
+            border-radius: 0.5rem;
             padding: 0.25rem;
             overflow-x: auto;
         }
@@ -1220,8 +1222,8 @@ async def home():
             padding: 0.75rem 1rem;
             border: none;
             background: transparent;
-            color: hsl(var(--muted-foreground));
-            border-radius: calc(var(--radius) - 2px);
+            color: #94a3b8;
+            border-radius: 0.375rem;
             cursor: pointer;
             transition: all 0.2s;
             font-weight: 500;
@@ -1229,14 +1231,14 @@ async def home():
         }
         
         .tab-btn:hover {
-            background: hsl(var(--background));
-            color: hsl(var(--foreground));
+            background: #475569;
+            color: #f1f5f9;
         }
         
         .tab-btn.active {
-            background: hsl(var(--background));
-            color: hsl(var(--foreground));
-            box-shadow: var(--shadow);
+            background: #3b82f6;
+            color: #ffffff;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.3);
         }
         
         /* Tab Content */
@@ -1250,9 +1252,9 @@ async def home():
         
         /* Student Management */
         .add-student-form {
-            background: hsl(var(--card));
-            border: 1px solid hsl(var(--border));
-            border-radius: var(--radius);
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
             padding: 1.5rem;
             margin-bottom: 2rem;
         }
@@ -1265,23 +1267,23 @@ async def home():
             display: block;
             margin-bottom: 0.5rem;
             font-weight: 500;
-            color: hsl(var(--foreground));
+            color: #f1f5f9;
         }
         
         .form-input {
             width: 100%;
             padding: 0.5rem 0.75rem;
-            border: 1px solid hsl(var(--border));
-            border-radius: calc(var(--radius) - 2px);
-            background: hsl(var(--background));
-            color: hsl(var(--foreground));
+            border: 1px solid #475569;
+            border-radius: 0.375rem;
+            background: #334155;
+            color: #f1f5f9;
             font-size: 0.875rem;
         }
         
         .form-input:focus {
             outline: none;
-            border-color: hsl(var(--ring));
-            box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 2px rgb(59 130 246 / 0.3);
         }
         
         .photo-upload-group {
@@ -1292,22 +1294,23 @@ async def home():
         }
         
         .photo-upload {
-            border: 2px dashed hsl(var(--border));
-            border-radius: var(--radius);
+            border: 2px dashed #475569;
+            border-radius: 0.5rem;
             padding: 1rem;
             text-align: center;
             cursor: pointer;
             transition: all 0.2s;
+            background: #334155;
         }
         
         .photo-upload:hover {
-            border-color: hsl(var(--primary));
-            background: hsl(var(--primary) / 0.05);
+            border-color: #3b82f6;
+            background: rgb(59 130 246 / 0.1);
         }
         
         .photo-upload.has-file {
-            border-color: hsl(var(--success));
-            background: hsl(var(--success) / 0.1);
+            border-color: #10b981;
+            background: rgb(16 185 129 / 0.1);
         }
         
         .photo-preview {
@@ -1326,16 +1329,17 @@ async def home():
         }
         
         .student-card {
-            background: hsl(var(--card));
-            border: 1px solid hsl(var(--border));
-            border-radius: var(--radius);
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
             padding: 1rem;
             transition: all 0.2s;
         }
         
         .student-card:hover {
-            box-shadow: var(--shadow-lg);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
             transform: translateY(-2px);
+            border-color: #3b82f6;
         }
         
         .student-photos {
@@ -1348,8 +1352,8 @@ async def home():
             width: 60px;
             height: 60px;
             object-fit: cover;
-            border-radius: var(--radius);
-            border: 1px solid hsl(var(--border));
+            border-radius: 0.5rem;
+            border: 1px solid #475569;
         }
         
         .analytics-grid {
@@ -1360,9 +1364,9 @@ async def home():
         }
         
         .analytics-card {
-            background: hsl(var(--card));
-            border: 1px solid hsl(var(--border));
-            border-radius: var(--radius);
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 0.5rem;
             padding: 1.5rem;
             text-align: center;
         }
@@ -1370,12 +1374,12 @@ async def home():
         .analytics-value {
             font-size: 2rem;
             font-weight: 700;
-            color: hsl(var(--primary));
+            color: #3b82f6;
             margin-bottom: 0.5rem;
         }
         
         .analytics-label {
-            color: hsl(var(--muted-foreground));
+            color: #94a3b8;
             font-size: 0.875rem;
         }
         
@@ -3429,7 +3433,7 @@ if __name__ == "__main__":
     uvicorn.run(
         "modern_web_app:app",
         host="0.0.0.0",
-        port=8001,
-        reload=False,
-        log_level="info"
+        port=PORT,
+        reload=DEBUG,
+        log_level="debug" if DEBUG else "info"
     )

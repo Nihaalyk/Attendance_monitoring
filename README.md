@@ -37,12 +37,40 @@ A comprehensive, AI-powered university attendance management system with advance
 
 ## 🚀 Quick Start
 
-### Prerequisites
+### 🌟 **Option 1: GitHub Codespaces (Recommended - One-Click Deploy!)**
+
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/Nihaalyk/Attendance_monitoring)
+
+1. **Click the badge above** or go to your repository → **Code** → **Codespaces** → **Create codespace**
+
+2. **Wait for automatic setup** (takes 2-3 minutes)
+   - All dependencies will be installed automatically
+   - Cloudflare tunnel will be configured
+   - System will be ready to use!
+
+3. **Configure MongoDB** (Required):
+   - Go to **Repository Settings** → **Secrets and variables** → **Codespaces**
+   - Add secret: `MONGODB_URL` = `your_mongodb_atlas_connection_string`
+   - Or create a free MongoDB Atlas account at [mongodb.com](https://www.mongodb.com/atlas)
+
+4. **Start the system**:
+   ```bash
+   ./run_codespace.sh
+   ```
+
+5. **Get your public URL** 🌐
+   - The script will automatically create a Cloudflare tunnel
+   - You'll get a public HTTPS URL like: `https://abc-def-ghi.trycloudflare.com`
+   - **Access from any device worldwide!**
+
+### 📱 **Option 2: Local Installation**
+
+#### Prerequisites
 - Python 3.8+
 - MongoDB Atlas account (free tier available)
 - Webcam or smartphone for capturing student photos
 
-### Installation
+#### Installation Steps
 
 1. **Clone the repository**
    ```bash
@@ -64,9 +92,9 @@ A comprehensive, AI-powered university attendance management system with advance
 4. **Configure MongoDB**
    - Create a MongoDB Atlas account at [mongodb.com](https://www.mongodb.com/atlas)
    - Create a new cluster and get your connection string
-   - Update the MongoDB URL in `modern_web_app.py` (line 30):
-   ```python
-   MONGODB_URL = "your_mongodb_connection_string_here"
+   - Set environment variable:
+   ```bash
+   export MONGODB_URL="your_mongodb_connection_string_here"
    ```
 
 5. **Initialize the database**
