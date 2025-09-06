@@ -452,7 +452,7 @@ class KnownFacesDatabase:
             landmarks_dict = {}
             quality_scores = {}
             
-            for position in ['f', 'l', 'r']:  # front, left, right
+            for position in ['F', 'L', 'R']:  # front, left, right
                 image_path = os.path.join(student_dir, f"{position}.jpg")
                 if os.path.exists(image_path):
                     # Load and process image

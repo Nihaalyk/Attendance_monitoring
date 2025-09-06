@@ -8,7 +8,7 @@ import shutil
 import tempfile
 import uuid
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 import json
@@ -28,6 +28,133 @@ from bson import ObjectId
 
 # Note: attendance_processor functionality is now integrated directly
 from known_faces_database import KnownFacesDatabase
+
+# Video processing configuration class
+class VideoProcessingConfig:
+    def __init__(self, frame_skip_interval=15, min_detection_confidence=0.7, 
+                 face_recognition_threshold=0.65, batch_size=32, max_faces_per_frame=50):
+        self.frame_skip_interval = frame_skip_interval
+        self.min_detection_confidence = min_detection_confidence
+        self.face_recognition_threshold = face_recognition_threshold
+        self.batch_size = batch_size
+        self.max_faces_per_frame = max_faces_per_frame
+
+# Video attendance processor class
+class VideoAttendanceProcessor:
+    def __init__(self, faces_db, config):
+        self.faces_db = faces_db
+        self.config = config
+        self.detected_students = set()
+        self.uncertain_students = []
+        
+    def process_video(self, video_path, progress_callback=None):
+        """Process video and return attendance results"""
+        import cv2
+        import numpy as np
+        from facial_features_extractor import FacialFeaturesExtractor
+        
+        try:
+            # Initialize feature extractor
+            feature_extractor = FacialFeaturesExtractor()
+            
+            # Open video
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                raise Exception("Could not open video file")
+                
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            
+            frame_count = 0
+            processed_frames = 0
+            
+            logger.info(f"Processing video: {total_frames} frames at {fps} FPS")
+            
+            while True:
+                ret, frame = cap.read()
+                if not ret:
+                    break
+                    
+                frame_count += 1
+                
+                # Skip frames based on interval
+                if frame_count % self.config.frame_skip_interval != 0:
+                    continue
+                    
+                processed_frames += 1
+                
+                # Update progress
+                if progress_callback:
+                    progress = min(0.8, (frame_count / total_frames) * 0.8)  # Use 80% for processing
+                    progress_callback(progress)
+                
+                # Detect faces in frame
+                faces = feature_extractor.detect_faces(frame)
+                
+                if faces:
+                    # Limit faces per frame
+                    faces = faces[:self.config.max_faces_per_frame]
+                    
+                    # Process each face
+                    for face in faces:
+                        if face.get('confidence', 0) >= self.config.min_detection_confidence:
+                            # Get face embedding
+                            embedding = feature_extractor.get_face_embedding(frame, face)
+                            
+                            if embedding is not None:
+                                # Match against known faces
+                                match_result = self.faces_db.match_face_embedding(
+                                    embedding, 
+                                    threshold=self.config.face_recognition_threshold
+                                )
+                                
+                                if match_result['match_found']:
+                                    student_name = match_result['student_name']
+                                    confidence = match_result['confidence']
+                                    
+                                    if confidence >= 0.8:  # High confidence
+                                        self.detected_students.add(student_name)
+                                        logger.info(f"Detected {student_name} with confidence {confidence:.3f}")
+                                    elif confidence >= 0.6:  # Medium confidence - uncertain
+                                        if student_name not in [s['name'] for s in self.uncertain_students]:
+                                            self.uncertain_students.append({
+                                                'name': student_name,
+                                                'confidence': confidence,
+                                                'frame': frame_count
+                                            })
+                                            logger.info(f"Uncertain match: {student_name} with confidence {confidence:.3f}")
+            
+            cap.release()
+            
+            # Final progress update
+            if progress_callback:
+                progress_callback(0.9)
+            
+            # Prepare results
+            all_students = list(self.faces_db.student_profiles.keys())
+            present_students = list(self.detected_students)
+            absent_students = [name for name in all_students if name not in self.detected_students]
+            uncertain_students = [s['name'] for s in self.uncertain_students if s['name'] not in self.detected_students]
+            
+            # Remove uncertain from absent
+            absent_students = [name for name in absent_students if name not in uncertain_students]
+            
+            results = {
+                'present_students': present_students,
+                'absent_students': absent_students,
+                'uncertain_students': uncertain_students,
+                'total_students': len(all_students),
+                'attendance_percentage': (len(present_students) / len(all_students)) * 100 if all_students else 0,
+                'processed_frames': processed_frames,
+                'total_frames': total_frames
+            }
+            
+            logger.info(f"Processing complete: {len(present_students)} present, {len(absent_students)} absent, {len(uncertain_students)} uncertain")
+            return results
+            
+        except Exception as e:
+            logger.error(f"Error processing video: {e}")
+            raise e
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -57,6 +184,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files for serving student photos
+app.mount("/photos", StaticFiles(directory="known_faces_optimized"), name="photos")
 
 # Global variables
 processing_jobs: Dict[str, Dict[str, Any]] = {}
@@ -3107,9 +3237,9 @@ async def add_student(
         
         # Save the three photos
         photos = {
-            'l': left_photo,
-            'r': right_photo,
-            'f': front_photo
+            'L': left_photo,
+            'R': right_photo,
+            'F': front_photo
         }
         
         logger.info(f"Saving photos for student {name} to {student_dir}")
@@ -3142,9 +3272,9 @@ async def add_student(
                 "student_id": student_id,
                 "class_name": class_name,
                 "photos": {
-                    "left": f"{student_dir}/l.jpg",
-                    "right": f"{student_dir}/r.jpg",
-                    "front": f"{student_dir}/f.jpg"
+                    "left": f"/photos/{name}/L.jpg",
+                    "right": f"/photos/{name}/R.jpg",
+                    "front": f"/photos/{name}/F.jpg"
                 },
                 "created_at": datetime.now(timezone.utc),
                 "active": True
@@ -3161,6 +3291,45 @@ async def add_student(
     except Exception as e:
         logger.error(f"Error adding student: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to add student: {str(e)}")
+
+@app.post("/migrate-photo-paths")
+async def migrate_photo_paths():
+    """Update existing student photo paths to use the new format"""
+    try:
+        client = get_mongo_client()
+        if not client:
+            raise HTTPException(status_code=503, detail="Database not available")
+        
+        db = client[DATABASE_NAME]
+        students_collection = db.students
+        
+        # Get all students
+        students = await students_collection.find({"active": True}).to_list(length=None)
+        updated_count = 0
+        
+        for student in students:
+            name = student['name']
+            # Update photo paths to new format
+            update_result = await students_collection.update_one(
+                {"_id": student["_id"]},
+                {"$set": {
+                    "photos.left": f"/photos/{name}/L.jpg",
+                    "photos.right": f"/photos/{name}/R.jpg", 
+                    "photos.front": f"/photos/{name}/F.jpg"
+                }}
+            )
+            if update_result.modified_count > 0:
+                updated_count += 1
+        
+        return JSONResponse({
+            "success": True,
+            "message": f"Updated photo paths for {updated_count} students",
+            "updated_count": updated_count
+        })
+        
+    except Exception as e:
+        logger.error(f"Error migrating photo paths: {e}")
+        raise HTTPException(status_code=500, detail=f"Migration failed: {str(e)}")
 
 @app.get("/students")
 async def get_students(class_name: str = None):
