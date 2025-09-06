@@ -1,0 +1,77 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Application specific
+uploads/
+results/
+attendance_output/
+static/
+tunnel.log
+*.db
+*.pkl
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+
+# Model files (too large for git)
+*.onnx
+*.pth
+*.pt
+models/
+
+# Test files and old versions
+test_*.py
+*_old.py
+*_backup.py
+web_app.py
+start_server.py
+attendance_processor.py
+setup.sh
+test_database_builder.py
+
+# Sample data (keep structure but not actual files)
+class7A.mp4
