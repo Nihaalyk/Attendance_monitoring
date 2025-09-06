@@ -26,7 +26,7 @@ from pymongo import MongoClient
 from motor.motor_asyncio import AsyncIOMotorClient
 from bson import ObjectId
 
-from attendance_processor import process_classroom_video, VideoAttendanceProcessor, VideoProcessingConfig
+# Note: attendance_processor functionality is now integrated directly
 from known_faces_database import KnownFacesDatabase
 
 # Configure logging
@@ -38,6 +38,9 @@ MONGODB_URL = os.getenv("MONGODB_URL", "mongodb+srv://nihaaly41:7849@attendence.
 DATABASE_NAME = "attendance_system"
 PORT = int(os.getenv("PORT", "8001"))
 DEBUG = os.getenv("DEBUG", "false").lower() == "true"
+
+# Global face database instance
+face_db = None
 
 # Create FastAPI app
 app = FastAPI(
@@ -85,15 +88,24 @@ os.makedirs("results", exist_ok=True)
 
 @app.on_event("startup")
 async def startup_db_client():
-    """Initialize MongoDB connection during startup"""
-    global mongo_client
+    """Initialize MongoDB connection and face database during startup"""
+    global mongo_client, face_db
     try:
+        # Initialize MongoDB
         mongo_client = AsyncIOMotorClient(MONGODB_URL)
         # Test connection
         await mongo_client.admin.command('ping')
         logger.info("Connected to MongoDB successfully")
+        
+        # Initialize face database
+        face_db = KnownFacesDatabase()
+        if not face_db.load_embeddings_from_file():
+            logger.info("Building face database from known_faces_optimized...")
+            face_db.build_database()
+        logger.info(f"Face database loaded with {len(face_db.student_profiles)} students")
+        
     except Exception as e:
-        logger.warning(f"MongoDB connection failed: {e}. Using in-memory storage.")
+        logger.warning(f"Startup error: {e}. Using fallback configuration.")
         mongo_client = None
 
 @app.on_event("shutdown")
@@ -3085,6 +3097,14 @@ async def add_student(
         student_dir = os.path.join("known_faces_optimized", name)
         os.makedirs(student_dir, exist_ok=True)
         
+        # Validate photos
+        if not left_photo or not left_photo.filename:
+            raise HTTPException(status_code=400, detail="Left photo is required")
+        if not right_photo or not right_photo.filename:
+            raise HTTPException(status_code=400, detail="Right photo is required")
+        if not front_photo or not front_photo.filename:
+            raise HTTPException(status_code=400, detail="Front photo is required")
+        
         # Save the three photos
         photos = {
             'l': left_photo,
@@ -3092,15 +3112,24 @@ async def add_student(
             'f': front_photo
         }
         
+        logger.info(f"Saving photos for student {name} to {student_dir}")
+        
         for position, photo in photos.items():
             if photo and photo.filename:
                 file_path = os.path.join(student_dir, f"{position}.jpg")
+                logger.info(f"Saving {position} photo to {file_path}")
                 with open(file_path, "wb") as buffer:
                     content = await photo.read()
                     buffer.write(content)
+                    logger.info(f"Saved {position} photo ({len(content)} bytes)")
         
         # Add to face database
-        face_db.add_new_student(name, student_dir)
+        if face_db is not None:
+            success = face_db.add_new_student(name, student_dir)
+            if not success:
+                logger.warning(f"Failed to add {name} to face database, but photos were saved")
+        else:
+            logger.warning("Face database not available, only saving photos and MongoDB record")
         
         # Save to MongoDB
         client = get_mongo_client()
