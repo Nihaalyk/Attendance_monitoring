@@ -32,12 +32,17 @@ from known_faces_database import KnownFacesDatabase
 # Video processing configuration class
 class VideoProcessingConfig:
     def __init__(self, frame_skip_interval=15, min_detection_confidence=0.7, 
-                 face_recognition_threshold=0.65, batch_size=32, max_faces_per_frame=50):
+                 face_recognition_threshold=0.65, batch_size=32, max_faces_per_frame=50,
+                 min_detections_for_presence=5, max_frames_to_process=None, 
+                 output_frame_interval=300):
         self.frame_skip_interval = frame_skip_interval
         self.min_detection_confidence = min_detection_confidence
         self.face_recognition_threshold = face_recognition_threshold
         self.batch_size = batch_size
         self.max_faces_per_frame = max_faces_per_frame
+        self.min_detections_for_presence = min_detections_for_presence
+        self.max_frames_to_process = max_frames_to_process
+        self.output_frame_interval = output_frame_interval
 
 # Video attendance processor class
 class VideoAttendanceProcessor:
@@ -282,6 +287,8 @@ def process_classroom_video_with_progress(video_path: str, job_id: str):
         frame_skip_interval=15,
         min_detection_confidence=0.7,
         face_recognition_threshold=0.65,
+        batch_size=32,
+        max_faces_per_frame=50,
         min_detections_for_presence=5,
         max_frames_to_process=None,
         output_frame_interval=300
@@ -297,72 +304,17 @@ def process_classroom_video_with_progress(video_path: str, job_id: str):
     fps = cap.get(cv2.CAP_PROP_FPS)
     cap.release()
     
-    # Update progress periodically during processing
-    def update_progress_callback(frame_count, total_frames):
+    # Process video with progress updates
+    def progress_callback(progress):
         if job_id in processing_jobs:
-            video_progress = (frame_count / total_frames) * 0.6
-            total_progress = 0.2 + video_progress
-            
-            processing_jobs[job_id]["progress"] = min(total_progress, 0.8)
-            processing_jobs[job_id]["message"] = f"Processing frame {frame_count}/{total_frames}..."
+            processing_jobs[job_id]["progress"] = 0.2 + (progress * 0.6)
+            processing_jobs[job_id]["message"] = f"Processing video... {int(progress * 100)}%"
     
-    # Process with progress updates
-    results = process_video_with_callback(processor, video_path, update_progress_callback)
+    results = processor.process_video(video_path, progress_callback)
     
     return results
 
-def process_video_with_callback(processor, video_path: str, progress_callback):
-    """Process video with progress callback"""
-    logger.info(f"Processing video: {video_path}")
-    
-    # Open video
-    import cv2
-    cap = cv2.VideoCapture(video_path)
-    if not cap.isOpened():
-        raise ValueError(f"Could not open video: {video_path}")
-    
-    # Get video properties
-    fps = cap.get(cv2.CAP_PROP_FPS)
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    
-    # Process frames
-    frame_count = 0
-    processed_count = 0
-    
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            break
-        
-        frame_count += 1
-        timestamp = frame_count / fps if fps > 0 else frame_count
-        
-        # Skip frames for efficiency
-        if frame_count % processor.config.frame_skip_interval != 0:
-            continue
-        
-        processed_count += 1
-        
-        # Process frame
-        frame_results = processor.process_frame(frame, timestamp)
-        
-        # Store frame results
-        processor.frame_results.append({
-            'frame_number': frame_count,
-            'timestamp': timestamp,
-            'detections': frame_results
-        })
-        
-        # Update progress every 2 processed frames
-        if processed_count % 2 == 0:
-            progress_callback(frame_count, total_frames)
-    
-    cap.release()
-    
-    # Generate final results
-    attendance_results = processor.generate_attendance_results()
-    
-    return attendance_results
+# Removed old process_video_with_callback function - using processor.process_video directly
 
 def process_video_background(job_id: str, video_path: str, original_filename: str):
     """Background task to process video"""
@@ -1693,7 +1645,13 @@ async def home():
                         
                         <div class="form-group">
                             <label class="form-label">Class</label>
-                            <input type="text" name="class_name" class="form-input" required placeholder="Enter class name (e.g., CS-101, Math-202)">
+                            <select name="class_name" class="form-input" required>
+                                <option value="">Select class...</option>
+                                <option value="ECE-A">ECE-A</option>
+                                <option value="ECE-B">ECE-B</option>
+                                <option value="other">Other (specify below)</option>
+                            </select>
+                            <input type="text" name="class_name_other" class="form-input mt-2" style="display: none;" placeholder="Enter custom class name">
                         </div>
                         
                         <div class="form-group">
@@ -1863,6 +1821,10 @@ async def home():
         let currentJobId = null;
         let pollInterval = null;
         let currentResults = null;
+        
+        // Modal functionality variables
+        let currentEditSession = null;
+        let sessionChanges = {};
         
         // File upload handling
         function handleFileSelect(event) {
@@ -2227,6 +2189,12 @@ async def home():
         // Load attendance history on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadAttendanceHistory();
+            
+            // Setup class dropdown handler
+            const classSelect = document.querySelector('select[name="class_name"]');
+            if (classSelect) {
+                classSelect.addEventListener('change', handleClassDropdownChange);
+            }
         });
         
         async function loadAttendanceHistory() {
@@ -2381,11 +2349,40 @@ async def home():
             }
         }
         
+        // Handle class dropdown change
+        function handleClassDropdownChange(event) {
+            const select = event.target;
+            const customInput = document.querySelector('input[name="class_name_other"]');
+            
+            if (select.value === 'other') {
+                customInput.style.display = 'block';
+                customInput.required = true;
+                select.required = false;
+            } else {
+                customInput.style.display = 'none';
+                customInput.required = false;
+                select.required = true;
+                customInput.value = '';
+            }
+        }
+
         // Student Management Functions
         async function addNewStudent(event) {
             event.preventDefault();
             
             const formData = new FormData(event.target);
+            
+            // Handle custom class name
+            const classSelect = document.querySelector('select[name="class_name"]');
+            if (classSelect && classSelect.value === 'other') {
+                const customClassName = formData.get('class_name_other');
+                if (!customClassName || customClassName.trim() === '') {
+                    showError('Please enter a custom class name');
+                    return;
+                }
+                formData.set('class_name', customClassName.trim());
+                formData.delete('class_name_other');
+            }
             
             // Validate that all photos are uploaded
             const leftPhoto = document.getElementById('leftPhoto').files[0];
@@ -2739,19 +2736,30 @@ async def home():
         }
         
         // Modal functionality
-        let currentEditSession = null;
-        let sessionChanges = {};
         
         async function openEditModal(sessionId) {
             try {
+                console.log('Opening edit modal for session:', sessionId);
+                
                 const response = await fetch(`/session/${sessionId}`);
-                if (!response.ok) throw new Error('Failed to fetch session details');
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Server error:', errorText);
+                    throw new Error(`Server returned ${response.status}: ${errorText}`);
+                }
                 
                 const sessionData = await response.json();
+                console.log('Session data received:', sessionData);
+                
                 currentEditSession = sessionData;
                 sessionChanges = {};
                 
-                document.getElementById('editModalContent').innerHTML = createEditModalContent(sessionData);
+                const modalContent = createEditModalContent(sessionData);
+                console.log('Modal content created');
+                
+                document.getElementById('editModalContent').innerHTML = modalContent;
                 document.getElementById('editSessionModal').style.display = 'flex';
                 
                 // Prevent body scroll
@@ -2759,7 +2767,7 @@ async def home():
                 
             } catch (error) {
                 console.error('Error opening edit modal:', error);
-                showError('Failed to load session details');
+                showError(`Failed to load session details: ${error.message}`);
             }
         }
         
