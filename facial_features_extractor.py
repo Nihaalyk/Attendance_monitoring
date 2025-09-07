@@ -64,23 +64,24 @@ class AdvancedFacialExtractor:
     def _init_models(self):
         """Initialize all face detection and recognition models"""
         try:
-            # MTCNN for face detection
+            # MTCNN for face detection (Enhanced settings)
             self.mtcnn = MTCNN(
                 image_size=self.config.face_size[0],
-                margin=0,
-                min_face_size=self.config.min_face_size,
-                thresholds=[0.6, 0.7, 0.7],
+                margin=20,  # Increased margin for better face crops
+                min_face_size=30,  # Smaller minimum to detect distant faces
+                thresholds=[0.5, 0.6, 0.6],  # More sensitive thresholds
                 factor=0.709,
-                post_process=False,
-                device=self.device
+                post_process=True,  # Enable post-processing for better quality
+                device=self.device,
+                keep_all=True  # Keep all detected faces
             )
             
             # FaceNet for embeddings
             self.facenet = InceptionResnetV1(pretrained='vggface2').eval().to(self.device)
             
-            # InsightFace for additional analysis
+            # InsightFace for additional analysis (Enhanced settings)
             self.insight_app = FaceAnalysis(providers=['CPUExecutionProvider'])
-            self.insight_app.prepare(ctx_id=0, det_size=(640, 640))
+            self.insight_app.prepare(ctx_id=0, det_size=(640, 640), det_thresh=0.4)  # Lower detection threshold
             
             # MediaPipe for facial landmarks
             self.mp_face_mesh = mp.solutions.face_mesh

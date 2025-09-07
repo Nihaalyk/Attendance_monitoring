@@ -159,16 +159,34 @@ class VideoAttendanceProcessor:
             all_students = list(self.faces_db.student_profiles.keys())
             present_students = list(self.detected_students)
             
-            # Get uncertain students (those detected with medium confidence but not promoted to present)
-            uncertain_student_names = []
+            # Categorize students based on their AVERAGE confidence from all detections
+            uncertain_students = []
+            final_present_students = []
+            
+            # Check each student's average confidence
+            for name in present_students:
+                if name in self.student_detections:
+                    stats = self.student_detections[name]
+                    avg_confidence = sum(stats['confidences']) / len(stats['confidences'])
+                    detection_count = stats['count']
+                    
+                    # Require both good confidence AND multiple detections for "present"
+                    if avg_confidence >= 0.92 and detection_count >= 3:
+                        final_present_students.append(name)
+                    elif avg_confidence >= 0.80 or detection_count >= 2:  # Uncertain category
+                        uncertain_students.append(name)
+                else:
+                    final_present_students.append(name)  # Fallback
+            
+            # Add originally uncertain students who weren't promoted to present
             for uncertain_data in self.uncertain_students:
                 name = uncertain_data['name']
-                if name not in self.detected_students:  # Not promoted to present
-                    uncertain_student_names.append(name)
+                if name not in final_present_students and name not in uncertain_students:
+                    uncertain_students.append(name)
             
-            uncertain_students = uncertain_student_names
+            present_students = final_present_students
             
-            # Absent students are those not detected at all (neither present nor uncertain)
+            # Absent students are those not detected at all
             detected_or_uncertain = set(present_students + uncertain_students)
             absent_students = [name for name in all_students if name not in detected_or_uncertain]
             
