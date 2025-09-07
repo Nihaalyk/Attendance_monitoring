@@ -208,6 +208,59 @@ class AdvancedFacialExtractor:
         logger.info(f"Processed {len(detections)} faces in {processing_time:.2f}s")
         
         return detections
+    
+    def get_face_embedding(self, image: np.ndarray, face_info: dict) -> Optional[np.ndarray]:
+        """
+        Compatibility method for existing code
+        Extract embedding for a single face detection
+        """
+        try:
+            # Convert face_info to FaceDetection if needed
+            if isinstance(face_info, dict):
+                if 'bbox' in face_info:
+                    bbox = face_info['bbox']
+                else:
+                    # Assume it's in x,y,w,h format
+                    bbox = (face_info.get('x', 0), face_info.get('y', 0), 
+                           face_info.get('w', 100), face_info.get('h', 100))
+                
+                detection = FaceDetection(
+                    bbox=bbox,
+                    confidence=face_info.get('confidence', 1.0)
+                )
+            else:
+                detection = face_info
+            
+            # Extract embedding
+            detections_with_embeddings = self.extract_face_embeddings(image, [detection])
+            
+            if detections_with_embeddings and detections_with_embeddings[0].embedding is not None:
+                return detections_with_embeddings[0].embedding
+            
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error in get_face_embedding: {e}")
+            return None
+    
+    def get_face_landmarks(self, image: np.ndarray, face_info: dict) -> Optional[np.ndarray]:
+        """
+        Compatibility method for existing code
+        Get landmarks for a single face detection
+        """
+        try:
+            # For compatibility, return the landmarks if available
+            if isinstance(face_info, dict) and 'landmarks' in face_info:
+                return face_info['landmarks']
+            elif hasattr(face_info, 'landmarks'):
+                return face_info.landmarks
+            
+            # If no landmarks available, return None
+            return None
+            
+        except Exception as e:
+            logger.error(f"Error in get_face_landmarks: {e}")
+            return None
 
 # Example usage and testing
 if __name__ == "__main__":

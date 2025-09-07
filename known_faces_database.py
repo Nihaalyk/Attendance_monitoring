@@ -439,13 +439,13 @@ class KnownFacesDatabase:
     def add_new_student(self, student_name, student_dir):
         """Add a new student to the face database"""
         try:
-            from facial_features_extractor import FacialFeaturesExtractor
+            from facial_features_extractor import AdvancedFacialExtractor
             import cv2
             import numpy as np
             
             # Initialize feature extractor if not already done
             if not hasattr(self, 'feature_extractor'):
-                self.feature_extractor = FacialFeaturesExtractor()
+                self.feature_extractor = AdvancedFacialExtractor()
             
             # Process the three images
             embeddings_list = []
@@ -463,13 +463,13 @@ class KnownFacesDatabase:
                         
                         if faces:
                             face = faces[0]  # Take the first face
-                            embedding = self.feature_extractor.get_face_embedding(image, face)
-                            landmarks = self.feature_extractor.get_face_landmarks(image, face)
+                            embedding = self.feature_extractor.get_face_embedding(image, {'bbox': face.bbox, 'confidence': face.confidence})
+                            landmarks = self.feature_extractor.get_face_landmarks(image, {'landmarks': face.landmarks})
                             
                             if embedding is not None:
                                 embeddings_list.append(embedding)
                                 landmarks_dict[position] = landmarks
-                                quality_scores[position] = face.get('confidence', 0.0)
+                                quality_scores[position] = face.confidence
                                 
                                 logger.info(f"Processed {position} view for {student_name}")
             

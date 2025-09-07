@@ -56,11 +56,11 @@ class VideoAttendanceProcessor:
         """Process video and return attendance results"""
         import cv2
         import numpy as np
-        from facial_features_extractor import FacialFeaturesExtractor
+        from facial_features_extractor import AdvancedFacialExtractor
         
         try:
             # Initialize feature extractor
-            feature_extractor = FacialFeaturesExtractor()
+            feature_extractor = AdvancedFacialExtractor()
             
             # Open video
             cap = cv2.VideoCapture(video_path)
@@ -102,9 +102,9 @@ class VideoAttendanceProcessor:
                     
                     # Process each face
                     for face in faces:
-                        if face.get('confidence', 0) >= self.config.min_detection_confidence:
+                        if face.confidence >= self.config.min_detection_confidence:
                             # Get face embedding
-                            embedding = feature_extractor.get_face_embedding(frame, face)
+                            embedding = feature_extractor.get_face_embedding(frame, {'bbox': face.bbox, 'confidence': face.confidence})
                             
                             if embedding is not None:
                                 # Match against known faces
