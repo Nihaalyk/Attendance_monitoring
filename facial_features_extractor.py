@@ -167,15 +167,22 @@ class AdvancedFacialExtractor:
                 if face_img.size > 0:
                     # Resize and preprocess for FaceNet
                     face_pil = Image.fromarray(face_img)
-                    face_tensor = self.mtcnn(face_pil)
                     
-                    if face_tensor is not None:
-                        face_tensor = face_tensor.unsqueeze(0).to(self.device)
-                        
-                        with torch.no_grad():
-                            embedding = self.facenet(face_tensor)
-                            embedding = F.normalize(embedding, p=2, dim=1)
-                            detection.embedding = embedding.cpu().numpy().flatten()
+                    # Resize to expected input size (160x160) and normalize
+                    face_resized = face_pil.resize((160, 160))
+                    face_array = np.array(face_resized).astype(np.float32)
+                    
+                    # Normalize to [-1, 1] range (FaceNet preprocessing)
+                    face_array = (face_array - 127.5) / 128.0
+                    
+                    # Convert to tensor: (C, H, W) format
+                    face_tensor = torch.from_numpy(face_array.transpose(2, 0, 1)).float()
+                    face_tensor = face_tensor.unsqueeze(0).to(self.device)  # Add batch dimension
+                    
+                    with torch.no_grad():
+                        embedding = self.facenet(face_tensor)
+                        embedding = F.normalize(embedding, p=2, dim=1)
+                        detection.embedding = embedding.cpu().numpy().flatten()
             
             return detections
             
