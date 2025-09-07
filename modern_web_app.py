@@ -133,17 +133,21 @@ class VideoAttendanceProcessor:
                                     self.student_detections[student_name]['confidences'].append(confidence)
                                     self.student_detections[student_name]['last_seen'] = f"{frame_count/fps:.1f}s"
                                     
-                                    if confidence >= 0.8:  # High confidence
+                                    if confidence >= 0.95:  # High confidence - Present
                                         self.detected_students.add(student_name)
                                         logger.info(f"Detected {student_name} with confidence {confidence:.3f}")
-                                    elif confidence >= 0.6:  # Medium confidence - uncertain
-                                        if student_name not in [s['name'] for s in self.uncertain_students]:
-                                            self.uncertain_students.append({
-                                                'name': student_name,
-                                                'confidence': confidence,
-                                                'frame': frame_count
-                                            })
-                                            logger.info(f"Uncertain match: {student_name} with confidence {confidence:.3f}")
+                                    elif confidence >= 0.75:  # Medium confidence - Uncertain
+                                        # Add to uncertain list if not already present as confirmed
+                                        if student_name not in self.detected_students:
+                                            uncertain_names = [s['name'] for s in self.uncertain_students]
+                                            if student_name not in uncertain_names:
+                                                self.uncertain_students.append({
+                                                    'name': student_name,
+                                                    'confidence': confidence,
+                                                    'frame': frame_count
+                                                })
+                                                logger.info(f"Uncertain match: {student_name} with confidence {confidence:.3f}")
+                                    # Below 0.75 confidence = ignored (too low)
             
             cap.release()
             
@@ -154,11 +158,19 @@ class VideoAttendanceProcessor:
             # Prepare results
             all_students = list(self.faces_db.student_profiles.keys())
             present_students = list(self.detected_students)
-            absent_students = [name for name in all_students if name not in self.detected_students]
-            uncertain_students = [s['name'] for s in self.uncertain_students if s['name'] not in self.detected_students]
             
-            # Remove uncertain from absent
-            absent_students = [name for name in absent_students if name not in uncertain_students]
+            # Get uncertain students (those detected with medium confidence but not promoted to present)
+            uncertain_student_names = []
+            for uncertain_data in self.uncertain_students:
+                name = uncertain_data['name']
+                if name not in self.detected_students:  # Not promoted to present
+                    uncertain_student_names.append(name)
+            
+            uncertain_students = uncertain_student_names
+            
+            # Absent students are those not detected at all (neither present nor uncertain)
+            detected_or_uncertain = set(present_students + uncertain_students)
+            absent_students = [name for name in all_students if name not in detected_or_uncertain]
             
             results = {
                 'present_students': present_students,
