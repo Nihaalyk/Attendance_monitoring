@@ -51,6 +51,8 @@ class VideoAttendanceProcessor:
         self.config = config
         self.detected_students = set()
         self.uncertain_students = []
+        # Track actual detection statistics
+        self.student_detections = {}  # {student_name: {'count': int, 'confidences': [float], 'first_seen': str, 'last_seen': str}}
         
     def process_video(self, video_path, progress_callback=None):
         """Process video and return attendance results"""
@@ -117,6 +119,20 @@ class VideoAttendanceProcessor:
                                     student_name = match_result['student_name']
                                     confidence = match_result['confidence']
                                     
+                                    # Initialize student detection data if not exists
+                                    if student_name not in self.student_detections:
+                                        self.student_detections[student_name] = {
+                                            'count': 0,
+                                            'confidences': [],
+                                            'first_seen': f"{frame_count/fps:.1f}s",
+                                            'last_seen': f"{frame_count/fps:.1f}s"
+                                        }
+                                    
+                                    # Update detection statistics
+                                    self.student_detections[student_name]['count'] += 1
+                                    self.student_detections[student_name]['confidences'].append(confidence)
+                                    self.student_detections[student_name]['last_seen'] = f"{frame_count/fps:.1f}s"
+                                    
                                     if confidence >= 0.8:  # High confidence
                                         self.detected_students.add(student_name)
                                         logger.info(f"Detected {student_name} with confidence {confidence:.3f}")
@@ -151,7 +167,8 @@ class VideoAttendanceProcessor:
                 'total_students': len(all_students),
                 'attendance_percentage': (len(present_students) / len(all_students)) * 100 if all_students else 0,
                 'processed_frames': processed_frames,
-                'total_frames': total_frames
+                'total_frames': total_frames,
+                'detection_stats': self.student_detections  # Include actual detection statistics
             }
             
             logger.info(f"Processing complete: {len(present_students)} present, {len(absent_students)} absent, {len(uncertain_students)} uncertain")
@@ -367,41 +384,58 @@ def process_video_background(job_id: str, video_path: str, original_filename: st
 
 def create_attendance_result(job_id: str, results: Dict, original_filename: str) -> Dict:
     """Create structured attendance result"""
+    # Extract lists from the results dictionary
+    present_students_list = results.get('present_students', [])
+    uncertain_students_list = results.get('uncertain_students', [])
+    absent_students_list = results.get('absent_students', [])
+    total_students = results.get('total_students', 0)
+    detection_stats = results.get('detection_stats', {})
+    
+    def get_student_stats(name):
+        """Get actual detection statistics for a student"""
+        if name in detection_stats:
+            stats = detection_stats[name]
+            avg_confidence = sum(stats['confidences']) / len(stats['confidences']) if stats['confidences'] else 0.0
+            return {
+                "confidence": round(avg_confidence, 3),
+                "detections": stats['count'],
+                "first_seen": stats['first_seen'],
+                "last_seen": stats['last_seen']
+            }
+        else:
+            return {
+                "confidence": 0.0,
+                "detections": 0,
+                "first_seen": "N/A",
+                "last_seen": "N/A"
+            }
+    
     present_students = [
         {
             "name": name,
-            "confidence": result.confidence,
-            "detections": result.detection_count,
-            "first_seen": result.first_detected_time,
-            "last_seen": result.last_detected_time
+            **get_student_stats(name)
         }
-        for name, result in results.items() 
-        if result.status == 'present'
+        for name in present_students_list
     ]
     
     uncertain_students = [
         {
             "name": name,
-            "confidence": result.confidence,
-            "detections": result.detection_count
+            **get_student_stats(name)
         }
-        for name, result in results.items() 
-        if result.status == 'uncertain'
+        for name in uncertain_students_list
     ]
     
-    absent_students = [
-        name for name, result in results.items() 
-        if result.status == 'absent'
-    ]
+    absent_students = absent_students_list
     
     return {
         "session_id": job_id,
         "video_filename": original_filename,
-        "total_students": len(results),
+        "total_students": total_students,
         "present_count": len(present_students),
         "absent_count": len(absent_students),
         "uncertain_count": len(uncertain_students),
-        "attendance_rate": len(present_students) / len(results) * 100,
+        "attendance_rate": (len(present_students) / total_students * 100) if total_students > 0 else 0,
         "present_students": sorted(present_students, key=lambda x: x["name"]),
         "absent_students": sorted(absent_students),
         "uncertain_students": sorted(uncertain_students, key=lambda x: x["name"]),
@@ -419,18 +453,51 @@ async def save_attendance_session(session_id: str, results: Dict, filename: str)
         db = client[DATABASE_NAME]
         collection = db.attendance_sessions
         
+        # Create results dictionary with proper structure using actual detection stats
+        results_dict = {}
+        detection_stats = results.get('detection_stats', {})
+        
+        def get_student_mongo_data(name, status):
+            """Get student data for MongoDB with actual detection statistics"""
+            if name in detection_stats and status != "absent":
+                stats = detection_stats[name]
+                avg_confidence = sum(stats['confidences']) / len(stats['confidences']) if stats['confidences'] else 0.0
+                return {
+                    "status": status,
+                    "confidence": round(avg_confidence, 3),
+                    "detections": stats['count'],
+                    "first_seen": stats['first_seen'],
+                    "last_seen": stats['last_seen']
+                }
+            else:
+                return {
+                    "status": status,
+                    "confidence": 0.0,
+                    "detections": 0,
+                    "first_seen": "N/A" if status == "absent" else "00:00:00",
+                    "last_seen": "N/A" if status == "absent" else "00:00:00"
+                }
+        
+        # Add present students with actual stats
+        for name in results.get('present_students', []):
+            results_dict[name] = get_student_mongo_data(name, "present")
+        
+        # Add uncertain students with actual stats
+        for name in results.get('uncertain_students', []):
+            results_dict[name] = get_student_mongo_data(name, "uncertain")
+        
+        # Add absent students
+        for name in results.get('absent_students', []):
+            results_dict[name] = get_student_mongo_data(name, "absent")
+        
         session_data = {
             "session_id": session_id,
             "filename": filename,
             "timestamp": datetime.now(timezone.utc),
-            "results": {name: {
-                "status": result["status"] if isinstance(result, dict) else result.status,
-                "confidence": result["confidence"] if isinstance(result, dict) else result.confidence,
-                "detections": result["detection_count"] if isinstance(result, dict) else result.detection_count,
-                "first_seen": result["first_detected_time"] if isinstance(result, dict) else result.first_detected_time,
-                "last_seen": result["last_detected_time"] if isinstance(result, dict) else result.last_detected_time
-            } for name, result in results.items()},
-            "corrections": []
+            "results": results_dict,
+            "corrections": [],
+            "total_students": results.get('total_students', 0),
+            "attendance_percentage": results.get('attendance_percentage', 0)
         }
         
         result = await collection.insert_one(session_data)
