@@ -508,6 +508,84 @@ class KnownFacesDatabase:
         except Exception as e:
             logger.error(f"Error adding new student {student_name}: {e}")
             return False
+    
+    def match_face_embedding(self, embedding: np.ndarray, threshold: float = 0.6) -> dict:
+        """
+        Match a face embedding against all known student profiles
+        
+        Args:
+            embedding: Face embedding to match
+            threshold: Similarity threshold for matching
+            
+        Returns:
+            Dictionary with match results
+        """
+        try:
+            best_match_name = None
+            best_match_confidence = 0.0
+            match_found = False
+            
+            for student_name, profile in self.student_profiles.items():
+                if profile.combined_embedding is not None:
+                    # Calculate cosine similarity
+                    similarity = self._calculate_cosine_similarity(embedding, profile.combined_embedding)
+                    
+                    if similarity > best_match_confidence:
+                        best_match_confidence = similarity
+                        best_match_name = student_name
+            
+            # Check if best match exceeds threshold
+            if best_match_confidence >= threshold:
+                match_found = True
+            
+            return {
+                'match_found': match_found,
+                'student_name': best_match_name,
+                'confidence': best_match_confidence,
+                'threshold': threshold
+            }
+            
+        except Exception as e:
+            logger.error(f"Error matching face embedding: {e}")
+            return {
+                'match_found': False,
+                'student_name': None,
+                'confidence': 0.0,
+                'threshold': threshold
+            }
+    
+    def _calculate_cosine_similarity(self, embedding1: np.ndarray, embedding2: np.ndarray) -> float:
+        """
+        Calculate cosine similarity between two embeddings
+        
+        Args:
+            embedding1: First embedding
+            embedding2: Second embedding
+            
+        Returns:
+            Cosine similarity score (0-1)
+        """
+        try:
+            import numpy as np
+            
+            # Normalize embeddings
+            norm1 = np.linalg.norm(embedding1)
+            norm2 = np.linalg.norm(embedding2)
+            
+            if norm1 == 0 or norm2 == 0:
+                return 0.0
+            
+            # Calculate cosine similarity
+            similarity = np.dot(embedding1, embedding2) / (norm1 * norm2)
+            
+            # Ensure result is between 0 and 1
+            similarity = max(0.0, min(1.0, (similarity + 1) / 2))
+            
+            return float(similarity)
+            
+        except Exception as e:
+            logger.error(f"Error calculating cosine similarity: {e}")
+            return 0.0
 
 # Example usage and testing
 if __name__ == "__main__":
